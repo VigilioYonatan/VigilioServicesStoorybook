@@ -1,4 +1,4 @@
-import { useContext, useState } from "preact/hooks";
+import { useContext } from "preact/hooks";
 import { FormControlContext } from "./Form";
 import type { JSX } from "preact";
 import type {
@@ -13,35 +13,33 @@ import { anidarPropiedades } from "./helpers";
 interface FormControlLabelProps<T extends object>
     extends Omit<HTMLAttributes<HTMLInputElement>, "type" | "name"> {
     title: string;
-    name: string;
-    type?: HTMLInputElement["type"];
+    name: keyof T;
     question?: JSX.Element | JSX.Element[] | string;
     options?: RegisterOptions<T, Path<T>>;
+    placeholder: string;
     ico?: JSX.Element | JSX.Element[];
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    array: { value: string; key: any }[];
 }
-function FormControl<T extends object>({
+function FormDataList<T extends object>({
     name,
     title,
-    type = "text",
     question,
     options = {},
+    array,
     ico,
     ...rest
 }: FormControlLabelProps<T>) {
     const {
         register,
+        getValues,
         formState: { errors },
     } = useContext<UseFormReturn<T, unknown, FieldValues>>(FormControlContext);
-    const [hidden, useHidden] = useState(true);
-
-    function onChangeHidde() {
-        useHidden(!hidden);
-    }
 
     const err = anidarPropiedades(errors, (name as string).split("."));
 
     return (
-        <div class="w-full mb-2">
+        <div class="lg:mb-2 w-full mb-2">
             <label
                 class="text-xs dark:text-secondary-light text-secondary-dark capitalize font-semibold"
                 htmlFor={name as string}
@@ -54,7 +52,7 @@ function FormControl<T extends object>({
                         Object.keys(err).length
                             ? "border border-red-600"
                             : "border border-gray-200 dark:border-gray-600"
-                    } w-full h-[2.5rem] flex items-center gap-2 text-xs rounded-lg  overflow-hidden dark:text-secondary-light text-secondary-dark dark:bg-admin-terciary bg-paper-light my-1 shadow-sm `}
+                    } w-full h-[2.5rem] flex items-center text-xs rounded-lg   dark:text-secondary-light text-secondary-dark dark:bg-admin-terciary bg-paper-light my-1 shadow-sm `}
                 >
                     {ico ? (
                         <div class="dark:bg-admin-background-dark bg-background-light  shadow min-w-[2.8rem]  h-full flex justify-center items-center">
@@ -63,27 +61,26 @@ function FormControl<T extends object>({
                     ) : null}
                     <input
                         class="outline-none bg-transparent  w-full px-2 sm:text-sm font-normal"
-                        id={name as string}
-                        type={hidden ? type : "text"}
+                        list="myDatalist"
                         {...rest}
+                        id={name as string}
                         {...register(name as unknown as Path<T>, options)}
                     />
-                    {type === "password" ? (
-                        <button
-                            type="button"
-                            aria-label="change password button eye"
-                            onClick={onChangeHidde}
-                            class="mr-4"
-                        >
-                            {hidden ? (
-                                <i class="fas fa-eye" />
-                            ) : (
-                                <i class="fas fa-eye-slash" />
-                            )}
-                        </button>
-                    ) : null}
+                    <datalist class="w-full" id="myDatalist">
+                        {array.map(({ value, key }) => (
+                            <option
+                                selected={
+                                    getValues(name as unknown as Path<T>) ===
+                                    key
+                                }
+                                value={key}
+                                key={value}
+                            >
+                                {value}
+                            </option>
+                        ))}
+                    </datalist>
                 </div>
-
                 {question ? (
                     <div class="relative group ">
                         <i class="fa-solid fa-circle-question text-xs dark:text-white" />
@@ -93,7 +90,6 @@ function FormControl<T extends object>({
                     </div>
                 ) : null}
             </div>
-
             {Object.keys(err).length ? (
                 <p class="text-xs text-red-600">{err?.message}</p>
             ) : null}
@@ -101,4 +97,4 @@ function FormControl<T extends object>({
     );
 }
 
-export default FormControl;
+export default FormDataList;

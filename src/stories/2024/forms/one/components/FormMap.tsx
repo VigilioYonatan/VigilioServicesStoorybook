@@ -1,123 +1,151 @@
+import { useContext, useMemo } from "preact/hooks";
+import type { JSX } from "preact";
+import type {
+    FieldValues,
+    Path,
+    PathValue,
+    RegisterOptions,
+    UseFormReturn,
+} from "react-hook-form";
 import {
-    GoogleMap,
-    useJsApiLoader,
+    MapContainer,
+    TileLayer,
     Marker,
-    type GoogleMapProps,
-    type MarkerProps,
-} from "@react-google-maps/api";
-import { useContext } from "preact/hooks";
-import { type Path, type PathValue, type UseFormReturn } from "react-hook-form";
+    useMapEvents,
+    Popup,
+} from "react-leaflet";
+import L, { type LeafletMouseEvent } from "leaflet";
+import { markerImage } from "~/config/settings";
 import { FormControlContext } from "./Form";
-import { type JSX } from "preact/jsx-runtime";
-interface FormControlLabelProps<T extends object> {
+import "leaflet/dist/leaflet.css";
+import type { CSSProperties } from "preact/compat";
+import { anidarPropiedades } from "./helpers";
+const customIcon = new L.Icon({
+    iconUrl: markerImage(),
+    iconSize: [35, 35], // Establece el tamaño del icono
+    iconAnchor: [17.5, 35], // Establece el punto del icono que corresponderá a la coordenada del marcador
+    popupAnchor: [0, -35], // Establece el punto desde el que se mostrará el popup relativo al icono
+});
+type FormMapProps<T extends object> = {
     title: string;
-    name: keyof T;
+    name: string;
     question?: JSX.Element | JSX.Element[] | string;
-}
-const GoogleMapPreact = GoogleMap as unknown as (
-    props: GoogleMapProps
-) => JSX.Element;
-const MarkerMarkPreact = Marker as unknown as (
-    props: MarkerProps
-) => JSX.Element;
-
+    options?: RegisterOptions<T, Path<T>>;
+    style?: CSSProperties;
+    zoom?: number;
+    disabled?: boolean;
+    defaultValue?: LeafletMouseEvent["latlng"] | null;
+};
 function FormMap<T extends object>({
     name,
     title,
     question,
-}: FormControlLabelProps<T>) {
+    options,
+    style = { height: "300px", width: "100%" },
+    zoom = 14,
+    disabled = false,
+}: FormMapProps<T>) {
     const {
         register,
-        setValue,
-        resetField,
         formState: { errors },
         watch,
-    } = useContext<UseFormReturn<T, unknown, undefined>>(FormControlContext);
-    const { isLoaded } = useJsApiLoader({
-        googleMapsApiKey: "AIzaSyDy3G0jNTJoDTCVDV7Cjm30javbCbr2lsk",
-    });
+        setValue,
+    } = useContext<UseFormReturn<T, unknown, FieldValues>>(FormControlContext);
+    const value = watch(name as Path<T>);
 
-    const handleMapClick: GoogleMapProps["onClick"] = (props) => {
-        const lat = props.latLng?.lat();
-        const lng = props.latLng?.lng();
+    function LocationMarker() {
+        const map = useMapEvents({
+            click(e) {
+                if (disabled) return;
+                setValue(name as Path<T>, e.latlng as PathValue<T, Path<T>>);
+                map.flyTo(e.latlng, map.getZoom());
+            },
+        });
 
-        setValue(
-            name as unknown as Path<T>,
-            { lat, lng } as PathValue<T, Path<T>>
+        return value === null ? null : (
+            <Marker position={value} icon={customIcon}>
+                <Popup>
+                    Longitud: {(value as LeafletMouseEvent["latlng"]).lng}
+                    <br />
+                    Latitud: {(value as LeafletMouseEvent["latlng"]).lat}
+                </Popup>
+            </Marker>
         );
-    };
-    const map = watch(name as unknown as Path<T>);
-    return (
-        <>
-            <div class="w-full">
-                <label
-                    class="text-xs dark:text-secondary-light text-secondary-dark capitalize font-semibold"
-                    htmlFor={name as string}
+    }
+
+    const MyMap = useMemo(() => {
+        return function MyMap() {
+            return (
+                <MapContainer
+                    center={value}
+                    style={style}
+                    zoom={zoom}
+                    scrollWheelZoom={false}
                 >
-                    {title}
-                </label>
-                <div class="relative flex items-center gap-2 w-full">
-                    {isLoaded ? (
-                        <div class="w-full flex flex-col gap-1 justify-center items-center">
-                            <GoogleMapPreact
-                                center={
-                                    map || { lat: -11.854602, lng: -77.071552 }
-                                }
-                                zoom={13}
-                                onClick={handleMapClick}
-                                mapContainerStyle={{
-                                    width: "100%",
-                                    height: "200px",
-                                }}
-                            >
-                                <MarkerMarkPreact
-                                    position={
-                                        map as unknown as {
-                                            lng: number;
-                                            lat: number;
-                                        }
-                                    }
-                                />
-                            </GoogleMapPreact>
-                            {map ? (
-                                <span class="w-full text-[9px] dark:text-secondary-light text-secondary-dark flex gap-1">
-                                    {JSON.stringify(map)}
-                                    <button
-                                        type="button"
-                                        class="text-xs bg-primary px-2 py-1 rounded-md text-white"
-                                        onClick={() =>
-                                            resetField(
-                                                name as unknown as Path<T>
-                                            )
-                                        }
-                                    >
-                                        <i class="fa-solid fa-eraser" />
-                                    </button>
-                                </span>
-                            ) : null}
+                    <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+                    <LocationMarker />
+                </MapContainer>
+            );
+        };
+    }, [style, value, zoom]);
 
-                            <input
-                                type="hidden"
-                                {...register(name as unknown as Path<T>)}
-                            />
-                        </div>
-                    ) : null}
+    const err = anidarPropiedades(errors, (name as string).split("."));
 
-                    {question ? (
-                        <div class="relative group">
-                            <i class="fa-solid fa-circle-question text-xs text-white" />
-                            <span class="text-[9px] min-w-[100px] hidden group-hover:block -top-[35px] right-1 p-1 shadow dark:bg-background-dark text-center absolute rounded-md text-white">
-                                {question}
-                            </span>
+    return (
+        <div class="w-full mb-2">
+            <label
+                class="text-xs dark:text-secondary-light text-secondary-dark capitalize font-semibold"
+                htmlFor={name as string}
+            >
+                {title}
+            </label>
+            <div class="flex items-center gap-2">
+                <MyMap />
+
+                <input
+                    type="hidden"
+                    {...register(name as unknown as Path<T>, options)}
+                />
+                {question ? (
+                    <div class="relative group ">
+                        <i class="fa-solid fa-circle-question text-xs dark:text-white" />
+                        <div class="text-xs min-w-[100px] hidden group-hover:block -top-[35px] right-1 p-1 shadow text-center absolute rounded-md dark:bg-admin-background-dark bg-background-light dark:text-white z-10">
+                            {question}
                         </div>
-                    ) : null}
-                </div>
-                {(errors as T)[name] ? (
-                    <p class="text-xs text-red-600">{errors[name]?.message}</p>
+                    </div>
                 ) : null}
             </div>
-        </>
+            <span class="dark:text-white text-xs">
+                {(value as any).lat},{(value as any).lng}
+            </span>
+            {Object.keys(err).length ? (
+                <p class="text-xs text-red-600">{err?.message}</p>
+            ) : null}
+        </div>
     );
 }
 
+interface MapProps {
+    value: LeafletMouseEvent["latlng"];
+}
+export function MapValue({ value }: MapProps) {
+    return (
+        <MapContainer center={value} style={{ height: "300px", width: "100%" }}>
+            <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            />
+            <Marker position={value} icon={customIcon}>
+                <Popup>
+                    Longitud: {(value as LeafletMouseEvent["latlng"]).lng}
+                    <br />
+                    Latitud: {(value as LeafletMouseEvent["latlng"]).lat}
+                </Popup>
+            </Marker>
+        </MapContainer>
+    );
+}
 export default FormMap;
